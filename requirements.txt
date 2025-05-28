@@ -1,14 +1,18 @@
-# ─ Streamlit
+# ────────────────────────────────────────────────
+# Core
 streamlit==1.33.0
+openai>=1.35.0           # Whisper + GPT-4o-mini
 
-# ─ OpenAI API
-openai>=1.35.0
-
-# ─ ffmpeg ラッパー + スタティックバイナリ
+# Audio ─ ffmpeg-python はラッパー。実体 ffmpeg バイナリは
+# Streamlit Cloud のデフォルトイメージに含まれています。
 ffmpeg-python>=0.2.0
-ffmpeg-static==0.4.0   # ★ 追加：Linux x64 用 ffmpeg バイナリを同梱
 
-# ─ その他
+# Templating / Utils
 jinja2>=3.1.4
 tabulate>=0.9.0
-sqlite-utils>=3.36.0
+sqlite-utils>=3.36.0     # SQLite を便利に扱うラッパー
+
+# ────────────────────────────────────────────────
+# （任意）ローカル推論を切り替える場合は下記も追加
+# faster-whisper==1.0.1
+# torch==2.3.0            # CUDA 無し CPU ビルド
