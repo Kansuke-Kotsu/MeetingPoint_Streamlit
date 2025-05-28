@@ -13,7 +13,9 @@ from jinja2 import Template
 # ─────────────────────────────────────────
 # OpenAI API キー & 共通設定
 # ─────────────────────────────────────────
-openai.api_key = os.getenv("OPENAI_API_KEY")
+import streamlit as st
+openai.api_key = os.getenv("OPENAI_API_KEY") or st.secrets["OPENAI_API_KEY"]
+
 WHISPER_MODEL  = "whisper-1"
 GPT_MODEL      = "gpt-4o-mini"
 
