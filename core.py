@@ -4,7 +4,6 @@
 from pathlib import Path
 import os
 import datetime as dt
-import ffmpeg
 
 import openai              # pip install openai
 from jinja2 import Template
@@ -15,45 +14,28 @@ from jinja2 import Template
 import streamlit as st
 openai.api_key = os.getenv("OPENAI_API_KEY") or st.secrets["OPENAI_API_KEY"]
 
-WHISPER_MODEL  = "whisper-1"
-GPT_MODEL      = "gpt-4o-mini"
+TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe" 
+GPT_MODEL        = "gpt-4o-mini"
 
 # ─────────────────────────────────────────
 # 1) Whisper API で文字起こし
 #    ※ ffmpeg 変換に失敗したらそのまま送信
 # ─────────────────────────────────────────
-def _to_wav(src: Path) -> Path:
-    """API 互換の 16 kHz/mono WAV に変換"""
-    dst = src.with_suffix(".wav")
-    (
-        ffmpeg.input(str(src))
-              .output(str(dst), acodec="pcm_s16le", ac=1, ar="16k")
-              .overwrite_output()
-              .run(quiet=True, capture_stdout=True, capture_stderr=True)
-    )
-    return dst
-
-
 def transcribe_audio(audio_path: Path, *, lang: str = "ja") -> str:
     """音声ファイルを文字起こし  
        - ffmpeg で WAV 化を試みる  
        - 失敗したら元ファイルをそのまま Whisper へ
     """
-    try:
-        path_to_send = _to_wav(audio_path)
-    except Exception as e:
-        # 変換エラー時はオリジナルを使用
-        #st.warning(f"⚠️ ffmpeg 変換に失敗したため、元ファイルを直接 Whisper に送信します。 ({e})")
-        path_to_send = audio_path
-
-    with open(path_to_send, "rb") as f:
+    audio_to_send = audio_path
+    with open(audio_to_send, "rb") as f:
         resp = openai.audio.transcriptions.create(
-            model=WHISPER_MODEL,
+            model=TRANSCRIBE_MODEL,
             file=f,
             language=lang,
             response_format="text",
         )
     return resp  # str
+#    resp = resp["text"].strip()  # str
 
 
 # ─────────────────────────────────────────
