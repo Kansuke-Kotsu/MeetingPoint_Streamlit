@@ -1,0 +1,8 @@
+streamlit>=1.33
+openai>=1.35     # Whisper API 用
+ffmpeg-python
+transformers>=4.39
+sentencepiece
+jinja2>=3.1
+tabulate
+sqlite-utils
