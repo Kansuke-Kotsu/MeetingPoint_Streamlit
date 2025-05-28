@@ -6,8 +6,6 @@ openai>=1.35.0           # Whisper + GPT-4o-mini
 # Audio ─ ffmpeg-python はラッパー。実体 ffmpeg バイナリは
 # Streamlit Cloud のデフォルトイメージに含まれています。
 ffmpeg-python>=0.2.0
-ffmpeg_static>=4.4.0            # ffmpeg のバイナリを提供
-# ────────────────────────────────────────────────
 
 # Templating / Utils
 jinja2>=3.1.4

@@ -5,12 +5,6 @@ from pathlib import Path
 import os
 import datetime as dt
 import ffmpeg
-import ffmpeg_static  # ← 追加
-
-# ffmpeg-static の実行ファイル場所を PATH へ追加
-os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_static.__file__)
-
-import textwrap
 
 import openai              # pip install openai
 from jinja2 import Template
