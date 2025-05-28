@@ -5,6 +5,11 @@ from pathlib import Path
 import os
 import datetime as dt
 import ffmpeg
+import ffmpeg_static  # ← 追加
+
+# ffmpeg-static の実行ファイル場所を PATH へ追加
+os.environ["PATH"] += os.pathsep + os.path.dirname(ffmpeg_static.__file__)
+
 import textwrap
 
 import openai              # pip install openai
@@ -21,28 +26,41 @@ GPT_MODEL      = "gpt-4o-mini"
 
 # ─────────────────────────────────────────
 # 1) Whisper API で文字起こし
+#    ※ ffmpeg 変換に失敗したらそのまま送信
 # ─────────────────────────────────────────
 def _to_wav(src: Path) -> Path:
-    """API 互換の 16 kHz / mono WAV に変換"""
+    """API 互換の 16 kHz/mono WAV に変換"""
     dst = src.with_suffix(".wav")
     (
         ffmpeg.input(str(src))
-            .output(str(dst), acodec="pcm_s16le", ac=1, ar="16k")
-            .overwrite_output()
-            .run(quiet=True, capture_stdout=True, capture_stderr=True)
+              .output(str(dst), acodec="pcm_s16le", ac=1, ar="16k")
+              .overwrite_output()
+              .run(quiet=True, capture_stdout=True, capture_stderr=True)
     )
     return dst
 
+
 def transcribe_audio(audio_path: Path, *, lang: str = "ja") -> str:
-    wav = _to_wav(audio_path)
-    with open(wav, "rb") as f:
+    """音声ファイルを文字起こし  
+       - ffmpeg で WAV 化を試みる  
+       - 失敗したら元ファイルをそのまま Whisper へ
+    """
+    try:
+        path_to_send = _to_wav(audio_path)
+    except Exception as e:
+        # 変換エラー時はオリジナルを使用
+        #st.warning(f"⚠️ ffmpeg 変換に失敗したため、元ファイルを直接 Whisper に送信します。 ({e})")
+        path_to_send = audio_path
+
+    with open(path_to_send, "rb") as f:
         resp = openai.audio.transcriptions.create(
             model=WHISPER_MODEL,
             file=f,
             language=lang,
             response_format="text",
         )
-    return resp   # str
+    return resp  # str
+
 
 # ─────────────────────────────────────────
 # 2) GPT-4o-mini で要約
