@@ -3,13 +3,13 @@ import streamlit as st
 from pathlib import Path
 import tempfile
 import datetime as dt
+import os
 
 from core import transcribe_audio, generate_minutes, generate_next_agenda
 from db import MinutesDB
 from templates import MINUTES_PROMPT, AGENDA_PROMPT
 
-# 先ほど作成したユーティリティをインポート
-from audio_utils import convert_m4a_to_mp3
+from audio_utils import convert_m4a_to_mp3, split_mp3_to_chunks
 
 st.set_page_config(page_title="議事録作成ツール", page_icon="📝", layout="wide")
 st.title("📝 議事録作成ツール（オフライン）")
@@ -30,47 +30,89 @@ uploaded_audio = st.file_uploader(
 )
 
 if uploaded_audio:
-    # 拡張子を調べる
+    # 1) アップロード中のスピナーを表示してバイト列を読み込む
+    with st.spinner("ファイルアップロード中…"):
+        audio_bytes = uploaded_audio.read()
+
     ext = Path(uploaded_audio.name).suffix.lower()
 
+    # 2) M4A → MP3 変換
     if ext == ".m4a":
-        # M4A → MP3 に変換
-        st.info("M4A ファイルが検出されました。MP3 に変換中...")
-        try:
-            mp3_bytes, mp3_filename = convert_m4a_to_mp3(
-                input_bytes=uploaded_audio.read(),
-                original_filename=uploaded_audio.name
-            )
-        except Exception as e:
-            st.error(f"変換エラー:\n{e}")
-            st.stop()
+        with st.spinner("ファイル形式変換中…"):
+            try:
+                mp3_bytes, mp3_filename = convert_m4a_to_mp3(
+                    input_bytes=audio_bytes,
+                    original_filename=uploaded_audio.name
+                )
+            except Exception as e:
+                st.error(f"変換エラー:\n{e}")
+                st.stop()
 
-        # 変換後の MP3 を一時ファイルに保存して、再生および transcribe に渡す
+        # 一時ファイルに MP3 を書き出す
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tf_mp3:
             tf_mp3.write(mp3_bytes)
             audio_path = Path(tf_mp3.name)
         st.success(f"M4A → MP3 変換完了: {mp3_filename}")
 
     else:
-        # MP3/WAV はそのままローカル一時ファイルに書き出し
-        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tf:
-            tf.write(uploaded_audio.read())
-            audio_path = Path(tf.name)
+        # MP3/WAV はそのまま一時ファイルに保存
+        with st.spinner("ファイル形式保存中…"):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tf:
+                tf.write(audio_bytes)
+                audio_path = Path(tf.name)
 
-    # 生成された audio_path を再生コンポーネントに渡す
+    # 音声を再生コンポーネントに渡す
     st.audio(str(audio_path), format=f"audio/{audio_path.suffix.replace('.', '')}")
 
-    # ここから文字起こし／議事録生成のボタン操作
+    # 3) 文字起こしボタンが押されたらチャンク分割→文字起こし→結合を行う
     if st.button("🔁 文字起こしを実行"):
-        with st.spinner("OpenAI Whisper で文字起こし中…"):
-            transcript_text = transcribe_audio(audio_path)
+        # チャンク分割中のスピナー
+        with st.spinner("音声をチャンクに分割中…"):
+            try:
+                chunk_paths = split_mp3_to_chunks(audio_path)
+            except Exception as e:
+                st.error(f"チャンク分割エラー:\n{e}")
+                # 元の一時ファイルは削除しておく
+                try:
+                    os.remove(audio_path)
+                except:
+                    pass
+                st.stop()
+
+        # 各チャンクを順に文字起こしし、テキストを結合
+        full_transcript = ""
+        for idx, chunk_path in enumerate(chunk_paths, start=1):
+            with st.spinner(f"AIによってチャンク {idx}/{len(chunk_paths)} を解析中…"):
+                part_text = transcribe_audio(chunk_path)
+            full_transcript += part_text.strip() + "\n\n"
+
+            # 解凍済みチャンクは削除してクリーンアップ
+            try:
+                os.remove(chunk_path)
+            except:
+                pass
+
         st.success("文字起こし完了！")
-        st.text_area("📝 文字起こし結果（編集可）", value=transcript_text, key="transcript_box")
+        st.text_area(
+            "📝 文字起こし結果（編集可）",
+            value=full_transcript,
+            key="transcript_box",
+            height=300
+        )
+
+        # 元の一時 MP3 も削除
+        try:
+            os.remove(audio_path)
+        except:
+            pass
+
 else:
     st.info("まず音声ファイルをアップロードしてください。")
     st.stop()
 
+# ─────────────────────────────────────────────
 # transcript_box の内容を取得
+# ─────────────────────────────────────────────
 transcript_text = st.session_state.get("transcript_box", "")
 
 col1, col2 = st.columns(2)
@@ -79,7 +121,7 @@ with col1:
         if not transcript_text.strip():
             st.warning("文字起こしを先に行ってください。")
         else:
-            with st.spinner("ローカル LLM で議事録生成中…"):
+            with st.spinner("AIによって議事録を生成中…"):
                 minutes_md = generate_minutes(transcript_text, MINUTES_PROMPT)
             st.markdown(minutes_md, unsafe_allow_html=True)
 
@@ -93,7 +135,7 @@ with col2:
         if not transcript_text.strip():
             st.warning("文字起こしを先に行ってください。")
         else:
-            with st.spinner("ローカル LLM でアジェンダ生成中…"):
+            with st.spinner("AIによって次回アジェンダを生成中…"):
                 agenda_md = generate_next_agenda(transcript_text, AGENDA_PROMPT, db)
             st.markdown(agenda_md, unsafe_allow_html=True)
 
@@ -102,3 +144,4 @@ st.subheader("📚 過去の議事録")
 for rec in db.fetch_all_minutes():
     with st.expander(rec["title"]):
         st.markdown(rec["minutes_md"], unsafe_allow_html=True)
+        

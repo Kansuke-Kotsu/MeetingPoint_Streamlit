@@ -3,15 +3,13 @@ import subprocess
 import tempfile
 import os
 from pathlib import Path
+
 from imageio_ffmpeg import get_ffmpeg_exe
 
 def convert_m4a_to_mp3(input_bytes: bytes, original_filename: str) -> (bytes, str):
     """
     M4Aバイト列をMP3バイト列に変換し、そのバイト列と出力ファイル名を返す。
-    
-    :param input_bytes: アップロードされたM4Aファイルのバイト列
-    :param original_filename: アップロード時のファイル名 (例: "meeting.m4a")
-    :return: (mp3_bytes, mp3_filename)
+    変換後は一時ファイルを即削除。
     """
     # 一時的に M4A ファイルを書き出し
     suffix = Path(original_filename).suffix  # ".m4a"
@@ -36,14 +34,12 @@ def convert_m4a_to_mp3(input_bytes: bytes, original_filename: str) -> (bytes, st
     ]
 
     try:
-        # ffmpeg 実行
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as e:
-        # 変換失敗時には例外を投げる
         stderr = e.stderr.decode(errors="ignore") if e.stderr else ""
         raise RuntimeError(f"ffmpegでの変換に失敗しました:\n{stderr}")
     finally:
-        # 入力用の一時 M4A は消す (変換前のファイル)
+        # 入力用の一時 M4A は消す
         try:
             os.remove(in_path)
         except:
@@ -56,10 +52,45 @@ def convert_m4a_to_mp3(input_bytes: bytes, original_filename: str) -> (bytes, st
     # 生成した MP3 ファイル名 (ダウンロード時に利用)
     mp3_filename = out_path.name
 
-    # 変換後のファイルも削除
+    # 変換後の一時 MP3 も即削除
     try:
         os.remove(out_path)
     except:
         pass
 
     return mp3_bytes, mp3_filename
+
+
+def split_mp3_to_chunks(mp3_path: Path, chunk_length_sec: int = 25 * 60) -> list[Path]:
+    """
+    MP3ファイルを指定した長さ（秒）ごとに分割し、一時ファイルとして保存した Path のリストを返す。
+    デフォルトは 25 分（1500 秒）。
+    戻り値の各 Path は一時的に生成された .mp3 ファイルであり、不要になったら削除してください。
+    """
+    ffmpeg_path = get_ffmpeg_exe()
+
+    # 一時ディレクトリを用意して、チャンクをそこに出力する
+    tmp_dir = Path(tempfile.mkdtemp(prefix="mp3_chunks_"))
+
+    # 出力ファイルパターン (例: tmp_dir/chunk_000.mp3, chunk_001.mp3, ...)
+    out_pattern = str(tmp_dir / "chunk_%03d.mp3")
+
+    # ffmpeg の segment 機能を使って分割
+    cmd = [
+        ffmpeg_path,
+        "-i", str(mp3_path),
+        "-f", "segment",
+        "-segment_time", str(chunk_length_sec),
+        "-c", "copy",
+        out_pattern
+    ]
+
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode(errors="ignore") if e.stderr else ""
+        raise RuntimeError(f"ffmpeg でチャンク分割に失敗しました:\n{stderr}")
+
+    # 出力ディレクトリから .mp3 ファイルをソートして取得
+    chunk_files = sorted(tmp_dir.glob("chunk_*.mp3"))
+    return chunk_files
