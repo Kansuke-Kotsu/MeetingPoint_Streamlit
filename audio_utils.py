@@ -61,7 +61,7 @@ def convert_m4a_to_mp3(input_bytes: bytes, original_filename: str) -> (bytes, st
     return mp3_bytes, mp3_filename
 
 
-def split_mp3_to_chunks(mp3_path: Path, chunk_length_sec: int = 25 * 60) -> list[Path]:
+def split_mp3_to_chunks(mp3_path: Path, chunk_length_sec: int = 20 * 60) -> list[Path]:
     """
     MP3ファイルを指定した長さ（秒）ごとに分割し、一時ファイルとして保存した Path のリストを返す。
     デフォルトは 25 分（1500 秒）。
