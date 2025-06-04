@@ -64,9 +64,11 @@ if uploaded_audio:
     # 音声を再生コンポーネントに渡す
     st.audio(str(audio_path), format=f"audio/{audio_path.suffix.replace('.', '')}")
 
-    # 3) 文字起こしボタンが押されたらチャンク分割→文字起こし→結合を行う
+    # ─────────────────────────────────────────────
+    #  文字起こし処理（チャンク分割→逐次解析→結合）
+    # ─────────────────────────────────────────────
     if st.button("🔁 文字起こしを実行"):
-        # チャンク分割中のスピナー
+        # 3) チャンク分割中のスピナー
         with st.spinner("音声をチャンクに分割中…"):
             try:
                 chunk_paths = split_mp3_to_chunks(audio_path)
@@ -79,32 +81,41 @@ if uploaded_audio:
                     pass
                 st.stop()
 
-        # 各チャンクを順に文字起こしし、テキストを結合
-        full_transcript = ""
-        for idx, chunk_path in enumerate(chunk_paths, start=1):
-            with st.spinner(f"AIによってチャンク {idx}/{len(chunk_paths)} を解析中…"):
-                part_text = transcribe_audio(chunk_path)
-            full_transcript += part_text.strip() + "\n\n"
+        # 4) 各チャンクを逐次文字起こしして連結
+        full_transcript = ""  # すべてのチャンクをまとめる文字列
+        total_chunks = len(chunk_paths)
 
-            # 解凍済みチャンクは削除してクリーンアップ
+        for idx, chunk_path in enumerate(chunk_paths, start=1):
+            # 各チャンク解析中のスピナー
+            with st.spinner(f"AIによってチャンク {idx}/{total_chunks} を解析中…"):
+                part_text = transcribe_audio(chunk_path).strip()
+
+            # 改行を挟んで全文に追加
+            full_transcript += part_text
+            if idx < total_chunks:
+                full_transcript += "\n\n"  # チャンク間に空行を入れる
+
+            # 解析後のチャンクファイルは削除
             try:
                 os.remove(chunk_path)
             except:
                 pass
 
+        # 元の一時 MP3 も不要なので削除
+        try:
+            os.remove(audio_path)
+        except:
+            pass
+
         st.success("文字起こし完了！")
+
+        # 5) 文字起こし結果をテキストエリアにまとめて表示
         st.text_area(
             "📝 文字起こし結果（編集可）",
             value=full_transcript,
             key="transcript_box",
             height=300
         )
-
-        # 元の一時 MP3 も削除
-        try:
-            os.remove(audio_path)
-        except:
-            pass
 
 else:
     st.info("まず音声ファイルをアップロードしてください。")
@@ -144,4 +155,3 @@ st.subheader("📚 過去の議事録")
 for rec in db.fetch_all_minutes():
     with st.expander(rec["title"]):
         st.markdown(rec["minutes_md"], unsafe_allow_html=True)
-        
