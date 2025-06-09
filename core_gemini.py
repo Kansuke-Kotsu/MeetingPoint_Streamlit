@@ -11,7 +11,7 @@ from google.generativeai import types
 
 # API キー設定 (AI Studio または環境変数)
 API_KEY = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
-client = genai.Client(api_key=API_KEY)
+genai.configure(api_key=API_KEY)
 
 # モデル設定
 # 音声入力対応の Gemini フラッシュモデル
@@ -32,6 +32,10 @@ def transcribe_audio(audio_path: Path, *, lang: str = "ja") -> str:
     file_size = audio_path.stat().st_size
     if file_size > 20 * 1024 * 1024:
         # 20MB 超はアップロードして参照
+        uploaded = genai.FileUploadClient()
+        # ファイルアップロードクライアントを初期化
+        client = genai.get_file_upload_client()
+        # ファイルアップロード
         uploaded = client.files.upload(file=str(audio_path))
         audio_input = uploaded
     else:
@@ -39,12 +43,24 @@ def transcribe_audio(audio_path: Path, *, lang: str = "ja") -> str:
         mime = f"audio/{audio_path.suffix.lstrip('.')}"
         audio_input = types.Part.from_bytes(data=data, mime_type=mime)
 
-    prompt = f"以下の音声を日本語で文字起こししてください。"
-    response = client.models.generate_content(
-        model=TRANSCRIBE_MODEL,
-        contents=[prompt, audio_input],
+    # モデルに音声を送信して文字起こし
+    client = genai.get_generative_model_client()
+    # 音声入力の設定
+    audio_input = types.AudioInput(
+        parts=[audio_input],
+        language_code=lang,  # 言語コードを指定
     )
-    return response.text.strip()
+    # 文字起こしリクエスト
+    response = client.models.transcribe_audio(
+        model=TRANSCRIBE_MODEL,
+        audio=audio_input,
+        # max_output_tokens 相当は generate_config で設定可 (省略時はデフォルト)
+    )
+    # 文字起こし結果を取得
+    if response.text:
+        return response.text.strip()
+    else:
+        raise ValueError("文字起こし結果が空です。音声ファイルを確認してください。")
 
 # ─────────────────────────────────────────
 # 2) Gemini API で要約 (２段階チャンク要約)
@@ -61,6 +77,10 @@ def _gpt_summarize(text: str, *, chunk_chars: int = 6000) -> str:
 
     for idx, chunk in enumerate(chunks, 1):
         user_prompt = f"【Part {idx}/{len(chunks)}】\n{chunk}"
+        # Gemini API で要約リクエスト
+        client = genai.get_generative_model_client()
+        # モデルに要約リクエスト
+        # contents はシステムプロンプトとユーザープロンプトのリスト
         resp = client.models.generate_content(
             model=GENERATION_MODEL,
             contents=[system_prompt, user_prompt],
@@ -100,6 +120,10 @@ def _gpt_next_agenda(transcript: str, prev_minutes_md: str | None) -> str:
         contents.append(prev_minutes_md)
     contents.append(transcript)
 
+    # Gemini API でアジェンダ生成リクエスト
+    client = genai.get_generative_model_client()
+    # モデルにアジェンダ生成リクエスト
+    # contents はシステムプロンプトとユーザープロンプトのリスト
     resp = client.models.generate_content(
         model=GENERATION_MODEL,
         contents=contents,
