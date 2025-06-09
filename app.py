@@ -11,7 +11,7 @@ from templates import MINUTES_PROMPT, AGENDA_PROMPT
 from audio_utils import convert_m4a_to_mp3, split_mp3_to_chunks
 
 st.set_page_config(page_title="議事録作成ツール", page_icon="📝", layout="wide")
-st.title("📝 MeetingPoint PoC tool ~beyond NotebookLM~")
+st.title("📝 MeetingPoint PoC tool -beyond NotebookLM-")
 
 # ─────────────────────────────────────────────────
 # DB 初期化
