@@ -6,8 +6,8 @@ import streamlit as st
 # ─────────────────────────────────────────
 # Google Gemini API (Google Gen AI SDK) 設定
 # ─────────────────────────────────────────
-from google.genai import types
 import google.generativeai as genai
+from google.generativeai import types
 
 # API キー設定 (AI Studio または環境変数)
 API_KEY = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
