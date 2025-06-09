@@ -16,8 +16,8 @@ API_KEY = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
 client = genai.Client(api_key=API_KEY)  # :contentReference[oaicite:0]{index=0}
 
 # モデル設定
-TRANSCRIBE_MODEL = "gemini-2.5-flash-preview-05-20"
-GENERATION_MODEL = "gemini-2.5-flash-preview-05-20"
+TRANSCRIBE_MODEL = "gemini-1.5-flash-latest"
+GENERATION_MODEL = "gemini-1.5-flash-latest"
 
 
 # ─────────────────────────────────────────
