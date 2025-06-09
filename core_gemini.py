@@ -27,21 +27,12 @@ GENERATION_MODEL = "gemini-2.5-flash-preview-05-20"
 # ─────────────────────────────────────────
 def transcribe_audio(audio_path: Path, *, lang: str = "ja") -> str:
     """音声ファイルを Gemini に送り、テキスト化を取得する"""
-    # ファイルサイズが小さい場合は inline、
-    # 大きい場合は upload API を使う
-    file_size = audio_path.stat().st_size
-    if file_size > 20 * 1024 * 1024:
-        # 20MB 超はアップロードして参照
-        uploaded = genai.FileUploadClient()
-        # ファイルアップロードクライアントを初期化
-        client = genai.get_file_upload_client()
-        # ファイルアップロード
-        uploaded = client.files.upload(file=str(audio_path))
-        audio_input = uploaded
-    else:
-        data = audio_path.read_bytes()
-        mime = f"audio/{audio_path.suffix.lstrip('.')}"
-        audio_input = types.Part.from_bytes(data=data, mime_type=mime)
+    uploaded = genai.FileUploadClient()
+    # ファイルアップロードクライアントを初期化
+    client = genai.get_file_upload_client()
+    # ファイルアップロード
+    uploaded = client.files.upload(file=str(audio_path))
+    audio_input = uploaded
 
     # モデルに音声を送信して文字起こし
     client = genai.get_generative_model_client()
