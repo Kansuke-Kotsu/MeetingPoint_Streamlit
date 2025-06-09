@@ -24,7 +24,7 @@ if not uploaded_audio:
     st.info("まず音声ファイルをアップロードしてください。")
     st.stop()
 
-# 読み込み＆形式変換（一度だけ実行）
+# 読み込み＆形式変換（一度だけ）
 if not st.session_state.get('audio_converted'):
     with st.spinner("ファイルアップロード中…"):
         audio_bytes = uploaded_audio.read()
@@ -64,55 +64,63 @@ if st.button("🔄 文字起こし＆議事録作成（OpenAI & Gemini 並行）
                 st.stop()
         st.session_state['chunk_paths'] = cps
         st.session_state['split_done'] = True
-    # 表示
-    #st.write("**分割されたチャンクファイル**")
-    #for cp in st.session_state['chunk_paths']:
-    #    st.write(f"- {cp.name}")
 
-    # 文字起こし（一度だけ）
+    # 文字起こし（一度だけ両方）
     if not st.session_state.get('transcript_done'):
-        full = ""
+        full_openai = ""
+        full_gemini = ""
         for idx, chunk in enumerate(st.session_state['chunk_paths'], start=1):
             with st.spinner(f"チャンク {idx}/{len(st.session_state['chunk_paths'])} 文字起こし中…"):
-                full += transcribe_audio(chunk).strip() + "\n"
+                full_openai += transcribe_audio(chunk).strip() + "\n"
+                full_gemini += transcribe_audio_gemini(chunk).strip() + "\n"
             try:
                 os.remove(chunk)
             except:
                 pass
         os.remove(audio_path)
-        st.session_state['full_transcript'] = full
+        st.session_state['transcript_openai'] = full_openai
+        st.session_state['transcript_gemini'] = full_gemini
         st.session_state['transcript_done'] = True
-        # 文字起こし結果を表示
-        st.write("### 文字起こし結果")
-        st.text_area("文字起こし結果", value=full, height=300, key="transcript_area")
+        st.success("文字起こし完了！")
 
-    transcript = st.session_state['full_transcript']
-    if not transcript.strip():
-        st.warning("文字起こしが空です。")
-    else:
-        # 並行生成
-        with st.spinner("議事録・アジェンダ生成中…"):
-            # OpenAI
-            m_oa = generate_minutes_openai(transcript, MINUTES_PROMPT)
-            a_oa = generate_next_agenda_openai(transcript, AGENDA_PROMPT, db)
-            # Gemini
-            m_gm = generate_minutes_gemini(transcript, MINUTES_PROMPT)
-            a_gm = generate_next_agenda_gemini(transcript, AGENDA_PROMPT, db)
+    # 各結果の取得
+    transcript_openai = st.session_state.get('transcript_openai', '')
+    transcript_gemini = st.session_state.get('transcript_gemini', '')
 
-        # レイアウト
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("📄 OpenAI ChatGPT 議事録")
-            st.markdown(m_oa, unsafe_allow_html=True)
-            st.subheader("🗓️ OpenAI 次回アジェンダ")
-            st.markdown(a_oa, unsafe_allow_html=True)
-            db.save_minutes(f"OpenAI {dt.datetime.now():%Y-%m-%d %H:%M}", transcript, m_oa)
-        with col2:
-            st.subheader("📄 Gemini 議事録")
-            st.markdown(m_gm, unsafe_allow_html=True)
-            st.subheader("🗓️ Gemini 次回アジェンダ")
-            st.markdown(a_gm, unsafe_allow_html=True)
-            db.save_minutes(f"Gemini {dt.datetime.now():%Y-%m-%d %H:%M}", transcript, m_gm)
+    # 文字起こし結果表示
+    st.subheader("### 文字起こし結果 比較")
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        st.markdown("**OpenAI Whisper**")
+        st.text_area("OpenAI 文字起こし", value=transcript_openai, height=300, key="trans_openai")
+    with col_t2:
+        st.markdown("**Gemini Whisper**")
+        st.text_area("Gemini 文字起こし", value=transcript_gemini, height=300, key="trans_gemini")
+
+    # 並行生成
+    with st.spinner("議事録・アジェンダ生成中…"):
+        # OpenAI版
+        minutes_oa = generate_minutes_openai(transcript_openai, MINUTES_PROMPT)
+        agenda_oa = generate_next_agenda_openai(transcript_openai, AGENDA_PROMPT, db)
+        # Gemini版
+        minutes_gm = generate_minutes_gemini(transcript_gemini, MINUTES_PROMPT)
+        agenda_gm = generate_next_agenda_gemini(transcript_gemini, AGENDA_PROMPT, db)
+
+    # 議事録・アジェンダ表示
+    st.subheader("### 議事録＆次回アジェンダ 比較")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("📄 OpenAI ChatGPT 議事録")
+        st.markdown(minutes_oa, unsafe_allow_html=True)
+        st.subheader("🗓️ OpenAI 次回アジェンダ")
+        st.markdown(agenda_oa, unsafe_allow_html=True)
+        db.save_minutes(f"OpenAI {dt.datetime.now():%Y-%m-%d %H:%M}", transcript_openai, minutes_oa)
+    with col2:
+        st.subheader("📄 Gemini 議事録")
+        st.markdown(minutes_gm, unsafe_allow_html=True)
+        st.subheader("🗓️ Gemini 次回アジェンダ")
+        st.markdown(agenda_gm, unsafe_allow_html=True)
+        db.save_minutes(f"Gemini {dt.datetime.now():%Y-%m-%d %H:%M}", transcript_gemini, minutes_gm)
 
 # 過去の議事録
 st.divider()
