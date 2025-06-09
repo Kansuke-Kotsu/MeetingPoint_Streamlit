@@ -27,7 +27,6 @@ GENERATION_MODEL = "gemini-2.5-flash-preview-05-20"
 # ─────────────────────────────────────────
 def transcribe_audio(audio_path: Path, *, lang: str = "ja") -> str:
     """音声ファイルを Gemini に送り、テキスト化を取得する"""
-    uploaded = genai.FileUploadClient()
     # ファイルアップロードクライアントを初期化
     client = genai.get_file_upload_client()
     # ファイルアップロード
