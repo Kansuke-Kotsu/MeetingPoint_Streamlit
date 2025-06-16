@@ -57,10 +57,8 @@ if st.button("🚀 処理開始（OpenAI & Gemini）"):
             transcripts_gm.append(transcribe_audio_gemini(chunk).strip())
             os.remove(chunk)
         os.remove(audio_path)
-        transcript_openai = "
-".join(transcripts_oa)
-        transcript_gemini = "
-".join(transcripts_gm)
+        transcript_openai = "".join(transcripts_oa)
+        transcript_gemini = "".join(transcripts_gm)
         # 議事録とアジェンダ生成
         minutes_oa = generate_minutes_openai(transcript_openai, MINUTES_PROMPT)
         agenda_oa = generate_next_agenda_openai(transcript_openai, AGENDA_PROMPT, db)
@@ -94,3 +92,67 @@ st.subheader("📚 過去の議事録")
 for rec in db.fetch_all_minutes():
     with st.expander(rec["title"]):
         st.markdown(rec["minutes_md"], unsafe_allow_html=True)
+        st.text_area("文字起こしデータ", rec["transcript"], height=200)
+        st.caption(f"保存日時: {rec['created_at']:%Y-%m-%d %H:%M}")
+# 保存日時の表示
+st.caption(f"最終更新日時: {dt.datetime.now():%Y-%m-%d %H:%M}")
+# スタイル設定
+st.markdown("""
+<style>
+    .stTextArea textarea {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 14px;
+    }
+    .stMarkdown {
+        font-family: 'Arial', sans-serif;
+        line-height: 1.6;
+    }
+    .stExpanderHeader {
+        font-weight: bold;
+        color: #333;
+    }
+    .stExpanderContent {
+        background-color: #f9f9f9;
+        padding: 10px;
+        border-radius: 5px;
+    }
+    .stButton {
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: pointer;
+    }
+    .stButton:hover {
+        background-color: #45a049;
+    }
+    .stSpinner {
+        color: #4CAF50;
+    }
+    .stCaption {
+        font-size: 12px;
+        color: #666;
+    }
+    .stDivider {
+        border-top: 1px solid #ccc;
+        margin: 20px 0;
+    }
+    .stTabs {
+        margin-top: 20px;
+    }
+    .stTabLabel {
+        font-weight: bold;
+        color: #4CAF50;
+    }
+    .stTabContent {
+        padding: 20px;
+        background-color: #f0f0f0;
+        border-radius: 5px;
+    }
+</style>
+""", unsafe_allow_html=True)
