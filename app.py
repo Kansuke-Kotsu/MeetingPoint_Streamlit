@@ -12,7 +12,7 @@ from templates import MINUTES_PROMPT, AGENDA_PROMPT
 from audio_utils import convert_m4a_to_mp3, split_mp3_to_chunks
 
 st.set_page_config(page_title="議事録作成ツール", page_icon="📝", layout="wide")
-st.title("📝 議事録作成ツール（OpenAI vs Gemini 比較・リアルタイム表示）")
+st.title("📝 議事録作成ツール（OpenAI vs Gemini 比較・タブ表示）")
 
 # DB 初期化
 data_dir = Path(__file__).parent / "data"
@@ -48,7 +48,7 @@ audio_path = st.session_state['audio_path']
 st.audio(str(audio_path), format=f"audio/{audio_path.suffix.replace('.', '')}")
 
 # 実行ボタン
-if st.button("🔄 リアルタイム表示で処理開始（OpenAI & Gemini）"):
+if st.button("🔄 リアルタイム処理開始（OpenAI & Gemini）"):
     # カラム & プレースホルダ
     col_oa, col_gm = st.columns(2)
     oa_status = col_oa.empty()
@@ -67,97 +67,56 @@ if st.button("🔄 リアルタイム表示で処理開始（OpenAI & Gemini）"
     gm_status.success(f"チャンク分割完了：{len(chunk_paths)} 個")
 
     # 文字起こし
-    transcripts_oa = []
-    transcripts_gm = []
-    t_oa = 0.0
-    t_gm = 0.0
+    transcripts_oa, transcripts_gm = [], []
+    t_oa = t_gm = 0.0
     for idx, chunk in enumerate(chunk_paths, start=1):
         oa_status.info(f"[OpenAI] チャンク {idx}/{len(chunk_paths)} を文字起こし中…")
         gm_status.info(f"[Gemini] チャンク {idx}/{len(chunk_paths)} を文字起こし中…")
-        # OpenAI
-        start = time.time()
-        txt_oa = transcribe_audio(chunk).strip()
-        t_oa += time.time() - start
-        # Gemini
-        start = time.time()
-        txt_gm = transcribe_audio_gemini(chunk).strip()
-        t_gm += time.time() - start
-
-        transcripts_oa.append(txt_oa)
-        transcripts_gm.append(txt_gm)
-
+        start = time.time(); txt_oa = transcribe_audio(chunk).strip(); t_oa += time.time() - start
+        start = time.time(); txt_gm = transcribe_audio_gemini(chunk).strip(); t_gm += time.time() - start
+        transcripts_oa.append(txt_oa); transcripts_gm.append(txt_gm)
         oa_status.success(f"[OpenAI] チャンク {idx} 完了 ({t_oa:.1f}s)")
         gm_status.success(f"[Gemini] チャンク {idx} 完了 ({t_gm:.1f}s)")
-        # 削除
         os.remove(chunk)
-
-    # 元音声削除
     os.remove(audio_path)
-
-    # 統合
     transcript_openai = "\n".join(transcripts_oa)
     transcript_gemini = "\n".join(transcripts_gm)
     oa_status.empty(); gm_status.empty()
 
-    # 文字起こし時間表示
-    col_oa.metric("OpenAI Whisper 合計時間", f"{t_oa:.1f} 秒")
-    col_gm.metric("Gemini Whisper 合計時間", f"{t_gm:.1f} 秒")
-
-    # 文字起こし結果
-    col_t1, col_t2 = st.columns(2)
-    with col_t1:
-        st.subheader("文字起こし結果 - OpenAI Whisper")
-        st.text_area("OpenAI Transcript", value=transcript_openai, height=200)
-    with col_t2:
-        st.subheader("文字起こし結果 - Gemini Whisper")
-        st.text_area("Gemini Transcript", value=transcript_gemini, height=200)
-
-    # 議事録・アジェンダ生成
+    # 生成処理
     oa_status = col_oa.empty(); gm_status = col_gm.empty()
-    oa_status.text("[OpenAI] 議事録生成中…")
-    start = time.time()
-    minutes_oa = generate_minutes_openai(transcript_openai, MINUTES_PROMPT)
-    t_min_oa = time.time() - start
-    oa_status.success(f"[OpenAI] 議事録生成完了 ({t_min_oa:.1f}s)")
+    oa_status.text("[OpenAI] 議事録・アジェンダ生成中…")
+    start = time.time(); minutes_oa = generate_minutes_openai(transcript_openai, MINUTES_PROMPT); t_min_oa = time.time() - start
+    start = time.time(); agenda_oa = generate_next_agenda_openai(transcript_openai, AGENDA_PROMPT, db); t_ag_oa = time.time() - start
+    oa_status.success(f"[OpenAI] 完了 (議事録 {t_min_oa:.1f}s, アジェンダ {t_ag_oa:.1f}s)")
 
-    oa_status.text("[OpenAI] アジェンダ生成中…")
-    start = time.time()
-    agenda_oa = generate_next_agenda_openai(transcript_openai, AGENDA_PROMPT, db)
-    t_ag_oa = time.time() - start
-    oa_status.success(f"[OpenAI] アジェンダ生成完了 ({t_ag_oa:.1f}s)")
+    gm_status.text("[Gemini] 議事録・アジェンダ生成中…")
+    start = time.time(); minutes_gm = generate_minutes_gemini(transcript_gemini, MINUTES_PROMPT); t_min_gm = time.time() - start
+    start = time.time(); agenda_gm = generate_next_agenda_gemini(transcript_gemini, AGENDA_PROMPT, db); t_ag_gm = time.time() - start
+    gm_status.success(f"[Gemini] 完了 (議事録 {t_min_gm:.1f}s, アジェンダ {t_ag_gm:.1f}s)")
 
-    gm_status.text("[Gemini] 議事録生成中…")
-    start = time.time()
-    minutes_gm = generate_minutes_gemini(transcript_gemini, MINUTES_PROMPT)
-    t_min_gm = time.time() - start
-    gm_status.success(f"[Gemini] 議事録生成完了 ({t_min_gm:.1f}s)")
-
-    gm_status.text("[Gemini] アジェンダ生成中…")
-    start = time.time()
-    agenda_gm = generate_next_agenda_gemini(transcript_gemini, AGENDA_PROMPT, db)
-    t_ag_gm = time.time() - start
-    gm_status.success(f"[Gemini] アジェンダ生成完了 ({t_ag_gm:.1f}s)")
-
-    # 時間メトリクス表示
-    col_oa.metric("OpenAI Minutes 時間", f"{t_min_oa:.1f} 秒", delta=None)
-    col_oa.metric("OpenAI Agenda 時間", f"{t_ag_oa:.1f} 秒", delta=None)
-    col_gm.metric("Gemini Minutes 時間", f"{t_min_gm:.1f} 秒", delta=None)
-    col_gm.metric("Gemini Agenda 時間", f"{t_ag_gm:.1f} 秒", delta=None)
-
-    # 最終結果表示
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("📄 OpenAI ChatGPT 議事録")
+    # タブ切り替えで表示
+    tabs = st.tabs(["OpenAI", "Gemini"])
+    with tabs[0]:
+        st.metric("Whisper Time", f"{t_oa:.1f}s")
+        st.metric("Minutes Time", f"{t_min_oa:.1f}s")
+        st.metric("Agenda Time", f"{t_ag_oa:.1f}s")
+        st.subheader("文字起こし (OpenAI)")
+        st.text_area("", transcript_openai, height=200)
+        st.subheader("📄 議事録 (OpenAI)")
         st.markdown(minutes_oa, unsafe_allow_html=True)
-        st.subheader("🗓️ OpenAI 次回アジェンダ")
+        st.subheader("🗓️ アジェンダ (OpenAI)")
         st.markdown(agenda_oa, unsafe_allow_html=True)
-        db.save_minutes(f"OpenAI {dt.datetime.now():%Y-%m-%d %H:%M}", transcript_openai, minutes_oa)
-    with col2:
-        st.subheader("📄 Gemini 議事録")
+    with tabs[1]:
+        st.metric("Whisper Time", f"{t_gm:.1f}s")
+        st.metric("Minutes Time", f"{t_min_gm:.1f}s")
+        st.metric("Agenda Time", f"{t_ag_gm:.1f}s")
+        st.subheader("文字起こし (Gemini)")
+        st.text_area("", transcript_gemini, height=200)
+        st.subheader("📄 議事録 (Gemini)")
         st.markdown(minutes_gm, unsafe_allow_html=True)
-        st.subheader("🗓️ Gemini 次回アジェンダ")
+        st.subheader("🗓️ アジェンダ (Gemini)")
         st.markdown(agenda_gm, unsafe_allow_html=True)
-        db.save_minutes(f"Gemini {dt.datetime.now():%Y-%m-%d %H:%M}", transcript_gemini, minutes_gm)
 
 # 過去の議事録
 st.divider()
