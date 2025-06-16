@@ -4,9 +4,8 @@ import datetime as dt
 from typing import Optional
 
 import streamlit as st
-# ★ import を変更 ★
 from google import genai
-from jinja2 import Template
+#from jinja2 import Template
 
 # ─────────────────────────────────────────
 # Google Gemini API (Gen AI SDK) 設定
