@@ -46,68 +46,31 @@ audio_path = st.session_state['audio_path']
 st.audio(str(audio_path), format=f"audio/{audio_path.suffix.replace('.', '')}")
 
 # 実行ボタン
-if st.button("🚀 リアルタイム処理開始（OpenAI & Gemini）"):
-    # 全体進捗バー
-    total_steps = 2
-    overall_progress = st.sidebar.progress(0)
-
-    # チャンク分割
-    st.sidebar.write("## ステップ1: チャンク分割")
-    try:
+if st.button("🚀 処理開始（OpenAI & Gemini）"):
+    with st.spinner("処理中です...しばらくお待ちください"):
+        # チャンク分割
         chunk_paths = split_mp3_to_chunks(audio_path)
-        st.sidebar.success(f"{len(chunk_paths)} 個のチャンクを作成しました")
-    except Exception as e:
-        st.sidebar.error(f"チャンク分割エラー: {e}")
-        st.stop()
-    overall_progress.progress(1 / total_steps)
+        # 文字起こし
+        transcripts_oa, transcripts_gm = [], []
+        for chunk in chunk_paths:
+            transcripts_oa.append(transcribe_audio(chunk).strip())
+            transcripts_gm.append(transcribe_audio_gemini(chunk).strip())
+            os.remove(chunk)
+        os.remove(audio_path)
+        transcript_openai = "
+".join(transcripts_oa)
+        transcript_gemini = "
+".join(transcripts_gm)
+        # 議事録とアジェンダ生成
+        minutes_oa = generate_minutes_openai(transcript_openai, MINUTES_PROMPT)
+        agenda_oa = generate_next_agenda_openai(transcript_openai, AGENDA_PROMPT, db)
+        minutes_gm = generate_minutes_gemini(transcript_gemini, MINUTES_PROMPT)
+        agenda_gm = generate_next_agenda_gemini(transcript_gemini, AGENDA_PROMPT, db)
 
-    # 並列進捗バー
-    st.sidebar.write("## ステップ2: 文字起こし＆生成進捗")
-    prog_oa = st.sidebar.progress(0)
-    prog_gm = st.sidebar.progress(0)
-
-    # 各種タイマー
-    transcripts_oa, transcripts_gm = [], []
-    t_oa = t_gm = 0.0
-    count = len(chunk_paths)
-
-    # 文字起こし
-    for idx, chunk in enumerate(chunk_paths, start=1):
-        start = time.time()
-        txt_oa = transcribe_audio(chunk).strip()
-        t_oa += time.time() - start
-        start = time.time()
-        txt_gm = transcribe_audio_gemini(chunk).strip()
-        t_gm += time.time() - start
-        transcripts_oa.append(txt_oa)
-        transcripts_gm.append(txt_gm)
-        prog_oa.progress(idx / count)
-        prog_gm.progress(idx / count)
-        os.remove(chunk)
-    os.remove(audio_path)
-
-    overall_progress.progress(2 / total_steps)
-    st.sidebar.success("すべての文字起こしが完了しました！")
-
-    # 統合テキスト
-    transcript_openai = "\n".join(transcripts_oa)
-    transcript_gemini = "\n".join(transcripts_gm)
-
-    # タブ表示
+    # 結果表示
     tabs = st.tabs(["OpenAI", "Gemini"])
-
-    # OpenAIタブ
     with tabs[0]:
         st.header("OpenAI 結果")
-        st.metric("Whisper 時間", f"{t_oa:.1f}s")
-        # 議事録生成
-        with st.spinner("OpenAI: 議事録生成中…"):
-            start = time.time(); minutes_oa = generate_minutes_openai(transcript_openai, MINUTES_PROMPT); dt1 = time.time() - start
-        st.metric("Minutes 時間", f"{dt1:.1f}s")
-        # アジェンダ生成
-        with st.spinner("OpenAI: アジェンダ生成中…"):
-            start = time.time(); agenda_oa = generate_next_agenda_openai(transcript_openai, AGENDA_PROMPT, db); dt2 = time.time() - start
-        st.metric("Agenda 時間", f"{dt2:.1f}s")
         st.subheader("文字起こし結果")
         st.text_area("", transcript_openai, height=200)
         st.subheader("議事録")
@@ -115,17 +78,8 @@ if st.button("🚀 リアルタイム処理開始（OpenAI & Gemini）"):
         st.subheader("次回アジェンダ")
         st.markdown(agenda_oa, unsafe_allow_html=True)
         db.save_minutes(f"OpenAI {dt.datetime.now():%Y-%m-%d %H:%M}", transcript_openai, minutes_oa)
-
-    # Geminiタブ
     with tabs[1]:
         st.header("Gemini 結果")
-        st.metric("Whisper 時間", f"{t_gm:.1f}s")
-        with st.spinner("Gemini: 議事録生成中…"):
-            start = time.time(); minutes_gm = generate_minutes_gemini(transcript_gemini, MINUTES_PROMPT); dt3 = time.time() - start
-        st.metric("Minutes 時間", f"{dt3:.1f}s")
-        with st.spinner("Gemini: アジェンダ生成中…"):
-            start = time.time(); agenda_gm = generate_next_agenda_gemini(transcript_gemini, AGENDA_PROMPT, db); dt4 = time.time() - start
-        st.metric("Agenda 時間", f"{dt4:.1f}s")
         st.subheader("文字起こし結果")
         st.text_area("", transcript_gemini, height=200)
         st.subheader("議事録")
