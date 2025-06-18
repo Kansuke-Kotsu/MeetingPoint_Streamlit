@@ -54,6 +54,7 @@ def generate_minutes(transcript: str, template_str: str) -> str:
     resp = openai.chat.completions.create(
         model=GPT_MODEL,
         messages=messages,
+        temperature=0,  # 再現性のため温度を0に設定
     )
     return resp.choices[0].message.content.strip()
 
@@ -82,5 +83,6 @@ def generate_next_agenda(transcript: str, template_str: str, db) -> str:
     resp = openai.chat.completions.create(
         model=GPT_MODEL,
         messages=messages,
+        temperature=0, # 再現性のため温度を0に設定
     )
     return resp.choices[0].message.content.strip()

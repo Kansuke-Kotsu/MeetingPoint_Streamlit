@@ -12,7 +12,7 @@ from templates import MINUTES_PROMPT, AGENDA_PROMPT
 from audio_utils import convert_m4a_to_mp3, split_mp3_to_chunks
 
 st.set_page_config(page_title="議事録作成ツール", page_icon="📝", layout="wide")
-st.title("📝 議事録作成ツール（OpenAI vs Gemini 比較・タブ表示）")
+st.title("📝 議事録作成ツール（OpenAI vs Gemini #ランダム性=0）")
 
 # DB 初期化
 data_dir = Path(__file__).parent / "data"

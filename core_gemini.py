@@ -37,6 +37,7 @@ def transcribe_audio(audio_path: Path, *, lang: str = "ja") -> str:
     resp = client.models.generate_content(
         model=TRANSCRIBE_MODEL,
         contents=[prompt, myfile],
+        tempreture=0,  # 再現性のため温度を0に設定
     )  # :contentReference[oaicite:2]{index=2}
 
     text = resp.text or ""
@@ -59,6 +60,7 @@ def generate_minutes(transcript: str, template_str: str) -> str:
                   "\n".join(template_str),
                   "\n以下文字起こしデータ：",
                   "\n".join(transcript)],
+        tempreture=0, # 再現性のため温度を0に設定
     )
     return resp.text.strip()
 
